@@ -1,3 +1,7 @@
+anaconda 설치
+
+vscode 설치 : python plugin, pthon Extension pack, python indent 설치
+
 Anaconda Prompt 로 이동
 
 conda activate kiwoom_32
