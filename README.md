@@ -15,3 +15,7 @@ conda activate kiwoom_32
 (kiwoom_32) C:\Users\jack>pip install PyQt5Designer
 
 (kiwoom_32) C:\Users\jack>designer
+
+(kiwoom_32) C:\Windows\System32>conda install matplotlib
+
+(kiwoom_32) C:\Windows\System32>pip install pykrx --no-deps

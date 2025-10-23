@@ -28,9 +28,15 @@ class MyWindow(QMainWindow, form_class):
         self.trade_timer = QTimer(self)
         self.trade_timer.timeout.connect(self.trade_stocks)
 
+        # 매수한 종목 기록
+        self.bought_list = {}
+
     def start_trading(self):
         self.timer.start(1000 * 60)  # 1분마다 check_market_time 호출
-        self.trade_timer.start(1000 * 17)  # 1초마다 trade_stocks 호출
+        self.trade_timer.start(1000 * 17)  # 17초마다 trade_stocks 호출
+        # 매매 시작 시 매수한 종목 목록 초기화
+        today = datetime.datetime.now().strftime('%Y%m%d')
+        self.bought_list = {code: today for code, buy_date in self.bought_list.items() if buy_date == today}
 
     def stop_trading(self):
         self.timer.stop()
@@ -45,19 +51,18 @@ class MyWindow(QMainWindow, form_class):
     def trade_stocks(self):
         # 직전 거래일 조회
         yesterday = stock.get_nearest_business_day_in_a_week(datetime.datetime.now().strftime('%Y%m%d'))
+        today = datetime.datetime.now().strftime('%Y%m%d')
         codes = self.code_list.text().split(',')  # 종목 코드 분리
         k_value = float(self.k_value.text())  # K 값 입력 받기
 
         for code in codes:
-            if code.strip():
+            if code.strip() and (code.strip() not in self.bought_list or self.bought_list[code.strip()] != today):
                 current_price_raw = self.kiwoom.block_request("opt10001",
                                                             종목코드=code.strip(),
                                                             output="주식기본정보",
                                                             next=0)['현재가'][0].replace(",", "")
                 current_price = int(current_price_raw)
-                
-                # 현재가가 음수인 경우 양수로 변환
-                if current_price < 0:
+                if current_price < 0:  # 현재가가 음수인 경우 양수로 변환
                     current_price = abs(current_price)
                     
                 name = self.kiwoom.block_request("opt10001",
@@ -74,22 +79,24 @@ class MyWindow(QMainWindow, form_class):
                     target_price = close + (high - low) * k_value
                     
                     if current_price > target_price:  # 변동성 돌파 전략에 따라 매수
-                        self.buy_stock(code.strip(), current_price, 1)
+                        if self.buy_stock(code.strip(), current_price, 1):
+                            self.bought_list[code.strip()] = today  # 매수 성공 시 기록
 
     def buy_stock(self, code, price, quantity):
         account_number = self.kiwoom.GetLoginInfo("ACCNO")[0]  # 계좌번호 조회
-        
         order_type = 1  # 매수 주문
         order_result = self.kiwoom.SendOrder("매수주문", "0101", account_number, order_type, code, quantity, price, "00", "")
         if order_result == 0:
             self.buysell_log.append(f"매수 주문 성공: [{code}] [가격: {price}] [수량: {quantity}]")
+            return True
         else:
             self.buysell_log.append(f"매수 주문 실패: [{code}]")
+            return False
 
     def sell_all_stocks(self):
         account_number = self.kiwoom.GetLoginInfo("ACCNO")[0].strip()  # 계좌번호 조회
 
-        # 보유 주식 목록 조회
+        # 보유 주식 목록 조회를 위한 TR 요청
         stocks_info = self.kiwoom.block_request("opw00018",
                                                 계좌번호=account_number,
                                                 비밀번호="",
@@ -98,31 +105,23 @@ class MyWindow(QMainWindow, form_class):
                                                 output="계좌평가잔고개별합산",
                                                 next=0)
 
-        # 보유 종목이 없을 경우
-        if '종목번호' not in stocks_info or len(stocks_info['종목번호']) == 0:
-            self.buysell_log.append("보유 중인 종목이 없습니다.")
-            return
-
-        for idx, code in enumerate(stocks_info['종목번호']):
-            code = code.strip()[1:]  # 종목번호 앞 'A' 제거
-
-            qty_str = str(stocks_info['보유수량'][idx]).strip()
-            if not qty_str.isdigit():  # 공백 또는 숫자가 아닐 경우 건너뛰기
-                continue
-
-            quantity = int(qty_str)
-            if quantity <= 0:
-                continue
-
-            order_type = 2  # 매도 주문
-            order_result = self.kiwoom.SendOrder("매도주문", "0101", account_number,
-                                                order_type, code, quantity, 0, "03", "")
-
-            if order_result == 0:
-                self.buysell_log.append(f"매도 주문 성공: [{code}] [수량: {quantity}]")
-            else:
-                self.buysell_log.append(f"매도 주문 실패: [{code}]")
-
+        if '종목번호' in stocks_info:  # 보유 주식 목록이 있는 경우
+            for idx, code in enumerate(stocks_info['종목번호']):
+                # 종목번호 앞에 붙는 'A' 제거
+                code = code.strip()[1:]
+                quantity_str = stocks_info['보유수량'][idx].strip()
+                
+                if not quantity_str.isdigit():
+                    continue
+                    
+                quantity = int(quantity_str)
+                if quantity > 0:
+                    order_type = 2  # 매도 주문
+                    order_result = self.kiwoom.SendOrder("매도주문", "0101", account_number, order_type, code, quantity, 0, "03", "")
+                    if order_result == 0:
+                        self.buysell_log.append(f"매도 주문 성공: [{code}] [수량: {quantity}]")
+                    else:
+                        self.buysell_log.append(f"매도 주문 실패: [{code}]")
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
