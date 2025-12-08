@@ -1,5 +1,15 @@
 anaconda 설치
 
+## 32 bit env install, 관리자모드에서 anaconda prompt를 시작한다.
+(base) C:\Windows\System32>conda create -n kiwoom_32
+
+(base) C:\Windows\System32>conda activate kiwoom_32
+
+(kiwoom_32) C:\Windows\System32>conda config --env --set subdir win-32
+
+(kiwoom_32) C:\Windows\System32>conda install python=3.10
+
+## vscode 설치 및 설정
 vscode 설치 : python plugin, pthon Extension pack, python indent 설치
 
 Anaconda Prompt 로 이동
